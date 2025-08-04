@@ -111,7 +111,7 @@ class ImageProcessor:
         file: 'UploadFile',
         target_format: Optional[str] = None,
         max_dimensions: Optional[Tuple[int, int]] = None
-    ) -> Tuple[bytes, str]:
+    ) -> Tuple[bytes, str, dict]:
         """
         Process an uploaded file, handling HEIC/HEIF conversion if needed.
         
@@ -121,10 +121,20 @@ class ImageProcessor:
             max_dimensions: Optional max (width, height) to resize to
             
         Returns:
-            Tuple of (optimized_image_data, new_filename)
+            Tuple of (optimized_image_data, new_filename, metadata_dict)
+            where metadata_dict contains: width, height, format, size_kb, is_optimized, original_format
         """
+        from io import BytesIO
+        from PIL import Image as PILImage
+        
         # Read the file data
         file_data = file.file.read()
+        
+        # Get original image info
+        original_format = cls.get_format(file.filename)
+        with BytesIO(file_data) as img_io:
+            with PILImage.open(img_io) as img:
+                original_width, original_height = img.size
         
         # Determine the target format
         if target_format is None:
@@ -137,10 +147,25 @@ class ImageProcessor:
             max_dimensions=max_dimensions
         )
         
+        # Get optimized image info
+        with BytesIO(optimized_data) as img_io:
+            with PILImage.open(img_io) as img:
+                optimized_width, optimized_height = img.size
+        
         # Create new filename with correct extension
         filename = Path(file.filename).stem + f'.{target_format.lower()}'
         
-        return optimized_data, filename
+        # Prepare metadata
+        metadata = {
+            'width': optimized_width,
+            'height': optimized_height,
+            'format': target_format.upper(),
+            'size_kb': len(optimized_data) / 1024,  # Convert to KB
+            'is_optimized': True,
+            'original_format': original_format.upper() if original_format.upper() != target_format.upper() else None
+        }
+        
+        return optimized_data, filename, metadata
 
     @classmethod
     def process_base64_image(
@@ -148,7 +173,7 @@ class ImageProcessor:
         base64_data: str,
         target_format: str = 'JPEG',
         max_dimensions: Optional[Tuple[int, int]] = None
-    ) -> bytes:
+    ) -> Tuple[bytes, dict]:
         """
         Process a base64 encoded image.
         
@@ -158,8 +183,12 @@ class ImageProcessor:
             max_dimensions: Optional max (width, height) to resize to
             
         Returns:
-            Optimized image data as bytes
+            Tuple of (optimized_image_data, metadata_dict)
+            where metadata_dict contains: width, height, format, size_kb, is_optimized
         """
+        from io import BytesIO
+        from PIL import Image as PILImage
+        
         # Remove data URL prefix if present
         if ',' in base64_data:
             base64_data = base64_data.split(',', 1)[1]
@@ -167,12 +196,35 @@ class ImageProcessor:
         # Decode base64
         image_data = base64.b64decode(base64_data)
         
+        # Get original image info
+        with BytesIO(image_data) as img_io:
+            with PILImage.open(img_io) as img:
+                original_format = img.format or 'UNKNOWN'
+                original_width, original_height = img.size
+        
         # Optimize the image
-        return cls.optimize_image(
+        optimized_data = cls.optimize_image(
             image_data,
             target_format=target_format,
             max_dimensions=max_dimensions
         )
+        
+        # Get optimized image info
+        with BytesIO(optimized_data) as img_io:
+            with PILImage.open(img_io) as img:
+                optimized_width, optimized_height = img.size
+        
+        # Prepare metadata
+        metadata = {
+            'width': optimized_width,
+            'height': optimized_height,
+            'format': target_format.upper(),
+            'size_kb': len(optimized_data) / 1024,  # Convert to KB
+            'is_optimized': True,
+            'original_format': original_format.upper() if original_format.upper() != target_format.upper() else None
+        }
+        
+        return optimized_data, metadata
 
     @classmethod
     def process_existing_image(

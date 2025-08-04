@@ -379,13 +379,42 @@
             property.images.forEach((image, index) => {
                 const carouselItem = document.createElement('div');
                 carouselItem.className = `carousel-item ${index === 0 ? 'active' : ''}`;
+                // Format file size for display
+                const formatFileSize = (bytes) => {
+                    if (bytes < 1024) return bytes + ' B';
+                    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+                    else return (bytes / 1048576).toFixed(1) + ' MB';
+                };
+                
+                // Prepare metadata text
+                const sizeKB = image.size_kb || 0;
+                const width = image.width || 0;
+                const height = image.height || 0;
+                const format = image.format || 'Unknown';
+                const originalFormat = image.original_format || null;
+                const isOptimized = image.is_optimized || false;
+                
+                let metadataText = `${width}×${height}px • ${format}`;
+                if (originalFormat && originalFormat !== format) {
+                    metadataText += ` (converted from ${originalFormat})`;
+                }
+                metadataText += ` • ${formatFileSize(sizeKB * 1024)}`;
+                if (isOptimized) {
+                    metadataText += ' • Optimized';
+                }
+                
                 carouselItem.innerHTML = `
-                    <img src="/static/images/property_${property.id}/${image.filename}" 
-                         class="d-block w-100 zoomable-image" 
-                         alt="Property image"
-                         data-bs-toggle="modal" 
-                         data-bs-target="#imageZoomModal"
-                         style="cursor: zoom-in;">
+                    <div class="position-relative">
+                        <img src="/static/images/property_${property.id}/${image.filename}" 
+                             class="d-block w-100 zoomable-image" 
+                             alt="Property image"
+                             data-bs-toggle="modal" 
+                             data-bs-target="#imageZoomModal"
+                             style="cursor: zoom-in;">
+                        <div class="image-metadata text-center py-1 small text-muted bg-light">
+                            ${metadataText}
+                        </div>
+                    </div>
                 `;
                 carouselInner.appendChild(carouselItem);
             });

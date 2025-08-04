@@ -38,6 +38,14 @@ class PropertyImage(Base):
     is_main = Column(Boolean, default=False)
     property_id = Column(Integer, ForeignKey("properties.id"))
     
+    # Image metadata
+    width = Column(Integer, nullable=True)  # Image width in pixels
+    height = Column(Integer, nullable=True)  # Image height in pixels
+    format = Column(String(10), nullable=True)  # Image format (e.g., 'JPEG', 'PNG')
+    size_kb = Column(Float, nullable=True)  # File size in kilobytes
+    is_optimized = Column(Boolean, default=False)  # Whether the image has been optimized
+    original_format = Column(String(10), nullable=True)  # Original format if converted
+    
     # Relationship with property
     property = relationship("Property", back_populates="images")
 

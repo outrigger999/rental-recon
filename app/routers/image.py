@@ -54,7 +54,7 @@ async def process_and_save_image(
     
     try:
         # Process and optimize the image
-        processed_image, new_filename = await _process_uploaded_image(file, image_dir)
+        processed_image, new_filename, metadata = await _process_uploaded_image(file, image_dir)
         
         # If this is the main image and there's an existing main image, update it
         if is_main:
@@ -66,11 +66,17 @@ async def process_and_save_image(
                 existing_main.is_main = False
                 db.commit()
         
-        # Create image record in database
+        # Create image record in database with metadata
         db_image = PropertyImage(
             filename=new_filename,
             is_main=is_main,
-            property_id=property_id
+            property_id=property_id,
+            width=metadata['width'],
+            height=metadata['height'],
+            format=metadata['format'],
+            size_kb=metadata['size_kb'],
+            is_optimized=metadata['is_optimized'],
+            original_format=metadata['original_format']
         )
         db.add(db_image)
         db.commit()
@@ -91,7 +97,7 @@ async def process_and_save_image(
 async def _process_uploaded_image(
     file: UploadFile,
     output_dir: str
-) -> Tuple[bytes, str]:
+) -> Tuple[bytes, str, dict]:
     """
     Process an uploaded image file.
     
@@ -100,27 +106,24 @@ async def _process_uploaded_image(
         output_dir: Directory to save the processed image
         
     Returns:
-        Tuple of (processed_image_data, new_filename)
+        Tuple of (processed_image_data, new_filename, metadata_dict)
     """
     try:
         # Process the image using our ImageProcessor
         image_processor = ImageProcessor()
         
-        # Get the file extension from the original filename
-        file_extension = Path(file.filename).suffix.lower()
-        
-        # Process the image
-        processed_image, new_filename = await image_processor.process_uploaded_file(
+        # Process the image and get metadata
+        processed_data, new_filename, metadata = await image_processor.process_uploaded_file(
             file=file,
-            target_format='JPEG'  # Convert all images to JPEG for consistency
+            target_format='JPEG'  # Convert all to JPEG for consistency
         )
         
         # Save the processed image
         output_path = os.path.join(output_dir, new_filename)
         with open(output_path, 'wb') as f:
-            f.write(processed_image)
+            f.write(processed_data)
             
-        return processed_image, new_filename
+        return processed_data, new_filename, metadata
         
     except Exception as e:
         logger.error(f"Error in _process_uploaded_image: {str(e)}", exc_info=True)
@@ -199,48 +202,52 @@ async def paste_image(
         )
     
     try:
-        # Process the base64 image data
-        image_data = data["image_data"]
-        is_main = data.get("is_main", True)  # Default to main image for pasted images
-        
-        # Create a mock UploadFile for the pasted image
-        from fastapi.datastructures import UploadFile
-        from io import BytesIO
-        
-        # Process the image
-        if "," in image_data:
-            image_data = image_data.split(",")[1]
-            
-        # Decode base64 data
-        image_bytes = base64.b64decode(image_data)
-        
-        # Create a file-like object for the image processor
-        file_obj = BytesIO(image_bytes)
-        file_obj.filename = f"pasted_image.png"
-        
-        # Create a mock UploadFile
-        file = UploadFile(
-            filename=file_obj.filename,
-            file=file_obj,
-            content_type="image/png"
+        # Process the base64 image data and get metadata
+        image_processor = ImageProcessor()
+        processed_data, metadata = await image_processor.process_base64_image(
+            data["image_data"],
+            target_format='JPEG'  # Convert to JPEG for consistency
         )
         
-        # Process and save the image
-        db_image = await process_and_save_image(
-            file=file,
+        # Generate a unique filename
+        filename = f"pasted_{uuid.uuid4().hex}.jpg"
+        
+        # Ensure the image directory exists
+        image_dir = ensure_image_dir(property_id)
+        
+        # Save the processed image
+        output_path = os.path.join(image_dir, filename)
+        with open(output_path, 'wb') as f:
+            f.write(processed_data)
+        
+        # Create image record in database with metadata
+        db_image = PropertyImage(
+            filename=filename,
+            is_main=False,  # Pasted images are never main images by default
             property_id=property_id,
-            is_main=is_main,
-            db=db
+            width=metadata['width'],
+            height=metadata['height'],
+            format=metadata['format'],
+            size_kb=metadata['size_kb'],
+            is_optimized=metadata['is_optimized'],
+            original_format=metadata['original_format']
         )
+        db.add(db_image)
+        db.commit()
+        db.refresh(db_image)
         
         return {
             "id": db_image.id,
             "filename": db_image.filename,
             "is_main": db_image.is_main,
-            "message": "Pasted image processed and saved successfully"
+            "message": "Image pasted and optimized successfully"
         }
         
     except Exception as e:
+        logger.error(f"Error pasting image: {str(e)}", exc_info=True)
+        # Clean up any partially saved files
+        if 'output_path' in locals() and os.path.exists(output_path):
+            os.remove(output_path)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error processing pasted image: {str(e)}"
