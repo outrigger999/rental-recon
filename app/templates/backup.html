@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Backup Management{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Backup Management</h2>
+    <hr>
+
+    <!-- Flash Messages -->
+    {% if request.query_params.get('success') %}
+        {% set success_msg = {
+            'backup_created': 'Backup created successfully!',
+            'config_updated': 'Backup configuration updated successfully!',
+            'backups_deleted': 'Selected backups deleted successfully!'
+        } %}
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ success_msg.get(request.query_params.get('success'), 'Operation completed successfully!') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endif %}
+    
+    {% if request.query_params.get('error') %}
+        {% set error_msg = {
+            'backup_failed': 'Backup creation failed. Please try again.',
+            'invalid_config': 'Invalid configuration. Max backups must be between 1 and 50.',
+            'no_selection': 'Please select at least one backup to delete.',
+            'delete_failed': 'Failed to delete some backup files.'
+        } %}
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            {{ error_msg.get(request.query_params.get('error'), 'An error occurred. Please try again.') }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    {% endif %}
+
+    <!-- Backup Configuration -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4 class="card-title mb-0">Backup Configuration</h4>
+        </div>
+        <div class="card-body">
+            <dl class="row">
+                <dt class="col-sm-4">Backup Directory:</dt>
+                <dd class="col-sm-8">{{ backup_config.backup_directory }}</dd>
+                
+                <dt class="col-sm-4">Maximum Backups:</dt>
+                <dd class="col-sm-8">
+                    <form id="maxBackupsForm" action="/backup/config" method="POST" class="d-flex align-items-center">
+                        <input type="number" name="max_backups" id="maxBackupsInput" class="form-control form-control-sm" 
+                               style="width: 80px;" min="1" max="50" value="{{ backup_config.max_backups }}">
+                        <button type="button" id="saveMaxBackups" class="btn btn-sm btn-outline-primary ms-2">Save</button>
+                    </form>
+                </dd>
+                
+                <dt class="col-sm-4">Database Path:</dt>
+                <dd class="col-sm-8">{{ backup_config.database_path }}</dd>
+                
+                <dt class="col-sm-4">Auto Backup:</dt>
+                <dd class="col-sm-8">{{ "Enabled" if backup_config.auto_backup else "Disabled" }}</dd>
+                
+                <dt class="col-sm-4">Backup Interval:</dt>
+                <dd class="col-sm-8">Every {{ backup_config.backup_interval // 3600 }} hours</dd>
+                
+                <dt class="col-sm-4">Last Backup Time:</dt>
+                <dd class="col-sm-8">
+                    {% if last_backup_time %}
+                        {{ last_backup_time.strftime('%Y-%m-%d %H:%M:%S') }}
+                    {% else %}
+                        <span class="text-muted">No backup recorded yet.</span>
+                    {% endif %}
+                </dd>
+            </dl>
+        </div>
+    </div>
+
+    <!-- Manual Backup Trigger -->
+    <div class="mb-4">
+        <div class="d-flex gap-3">
+            <form action="/backup/trigger" method="POST">
+                <button type="submit" class="btn btn-primary">Run Manual Backup Now</button>
+            </form>
+        </div>
+        <small class="form-text text-muted mt-2">Backup: Creates a new database backup and keeps the {{ backup_config.max_backups }} most recent copies (limit: 1-50). With 1 backup, each new backup replaces the previous one.</small>
+    </div>
+
+    <!-- Restoration Instructions -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h4 class="card-title mb-0">Database Restoration Guide</h4>
+        </div>
+        <div class="card-body">
+            <p>To restore the database from a backup, follow these steps:</p>
+            <ol>
+                <li>Download the backup file you want to restore by clicking the "Download" button next to it</li>
+                <li>Stop the application if it's currently running</li>
+                <li>Rename the downloaded backup file to <code>rentals.db</code></li>
+                <li>Replace the existing database file (<code>{{ backup_config.database_path }}</code>) with your renamed backup file</li>
+                <li>Restart the application</li>
+            </ol>
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle-fill me-2"></i> The application will automatically use the restored database file once restarted.
+            </div>
+        </div>
+    </div>
+
+    <!-- List of Backups with Delete Functionality -->
+    <h4>Available Database Backups</h4>
+    {% if archives %}
+        <form id="deleteBackupsForm" action="/backup/delete" method="POST">
+            <div class="mb-3">
+                <button type="button" class="btn btn-danger" onclick="confirmDelete()">
+                    <i class="bi bi-trash"></i> Delete Selected Backups
+                </button>
+                <div class="form-check form-check-inline ms-3">
+                    <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                    <label class="form-check-label" for="selectAll">Select All</label>
+                </div>
+            </div>
+            
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>Select</th>
+                            <th>Backup File</th>
+                            <th>Created</th>
+                            <th>Size</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for backup in archives %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input backup-checkbox" 
+                                       name="selected_backups" value="{{ backup.filename }}">
+                            </td>
+                            <td>{{ backup.filename }}</td>
+                            <td>{{ backup.created.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ backup.size_mb }} MB</td>
+                            <td>
+                                <a href="/backup/download/{{ backup.filename }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </form>
+    {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle-fill me-2"></i> No backup files found. Create your first backup using the button above.
+        </div>
+    {% endif %}
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteConfirmModalLabel">Confirm Backup Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the following backup files? This action cannot be undone.</p>
+                <div id="selectedBackupsList"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="submitDelete()">Delete Backups</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- JavaScript for confirmation dialog and checkbox functionality -->
+<script>
+    function toggleSelectAll() {
+        const selectAllCheckbox = document.getElementById('selectAll');
+        const backupCheckboxes = document.querySelectorAll('.backup-checkbox');
+        
+        backupCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAllCheckbox.checked;
+        });
+    }
+    
+    function confirmDelete() {
+        // Get all selected checkboxes
+        const selectedCheckboxes = document.querySelectorAll('.backup-checkbox:checked');
+        
+        if (selectedCheckboxes.length === 0) {
+            alert('Please select at least one backup file to delete.');
+            return;
+        }
+        
+        // Populate the list of selected backups in the modal
+        const selectedBackupsList = document.getElementById('selectedBackupsList');
+        selectedBackupsList.innerHTML = '<ul class="mt-3">';
+        
+        selectedCheckboxes.forEach(checkbox => {
+            selectedBackupsList.innerHTML += `<li>${checkbox.value}</li>`;
+        });
+        
+        selectedBackupsList.innerHTML += '</ul>';
+        
+        // Show the modal
+        const deleteModal = new bootstrap.Modal(document.getElementById('deleteConfirmModal'));
+        deleteModal.show();
+    }
+    
+    function submitDelete() {
+        // Submit the form
+        document.getElementById('deleteBackupsForm').submit();
+    }
+    
+    // Initialization when document is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        const maxBackupsForm = document.getElementById('maxBackupsForm');
+        const maxBackupsInput = document.getElementById('maxBackupsInput');
+        const saveMaxBackupsBtn = document.getElementById('saveMaxBackups');
+        
+        // Validate input within allowed range
+        maxBackupsInput.addEventListener('input', function() {
+            let value = parseInt(this.value);
+            if (isNaN(value) || value < 1) {
+                this.value = 1;
+            } else if (value > 50) {
+                this.value = 50;
+            }
+        });
+        
+        // Save button with confirmation
+        saveMaxBackupsBtn.addEventListener('click', function() {
+            var newValue = maxBackupsInput.value;
+            var currentValue = "{{ backup_config.max_backups }}";
+            
+            if (newValue !== currentValue) {
+                if (confirm("Are you sure you want to change the maximum number of backups from " + currentValue + " to " + newValue + "?")) {
+                    maxBackupsForm.submit();
+                }
+            } else {
+                alert('No changes were made to the maximum number of backups.');
+            }
+        });
+    });
+</script>
+{% endblock %}

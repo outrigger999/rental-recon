@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+
+{% block title %}Rental Recon - All Properties{% endblock %}
+
+{% block content %}
+<!-- Color Key Legend -->
+<div class="card mb-4">
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center justify-content-between flex-wrap">
+            <div class="d-flex align-items-center">
+                <h5 class="mb-0 me-3">Commute Distance Ranking (Monday 8:30 AM):</h5>
+                <div class="d-flex gap-3 flex-wrap">
+                    <div class="d-flex align-items-center">
+                        <span class="rounded-pill me-2 d-inline-block" style="background-color: #28a745; width: 12px; height: 12px; min-width: 12px;"></span>
+                        <small>Closest</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="rounded-pill me-2 d-inline-block" style="background-color: #20c997; width: 12px; height: 12px; min-width: 12px;"></span>
+                        <small>2nd Closest</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="rounded-pill me-2 d-inline-block" style="background-color: #ffc107; width: 12px; height: 12px; min-width: 12px;"></span>
+                        <small>3rd Closest</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="rounded-pill me-2 d-inline-block" style="background-color: #fd7e14; width: 12px; height: 12px; min-width: 12px;"></span>
+                        <small>4th Closest</small>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="rounded-pill me-2 d-inline-block" style="background-color: #dc3545; width: 12px; height: 12px; min-width: 12px;"></span>
+                        <small>5th Closest</small>
+                    </div>
+                </div>
+            </div>
+            <button id="scrollToBottomBtn" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-arrow-down"></i> Scroll to Bottom
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="mb-4">
+    <h2>All Properties</h2>
+</div>
+
+<div id="propertyListContainer" class="row g-4">
+    <div class="col-12 text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Loading properties...</p>
+    </div>
+</div>
+
+<template id="propertyCardTemplate">
+    <div class="col-md-6 col-lg-4 col-xl-3">
+        <div class="card h-100 property-card" style="cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; transform: scale(0.85);">
+            <div class="card-img-top property-image-container" style="height: 120px; overflow: hidden;">
+                <img src="" alt="Property image" class="property-image" style="width: 100%; height: 100%; object-fit: cover;">
+                <div class="no-image d-flex align-items-center justify-content-center" style="height: 120px; background-color: #f8f9fa;">No image available</div>
+            </div>
+            <div class="card-body" style="padding: 0.75rem;">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title property-address mb-0" style="font-size: 0.9rem; line-height: 1.2; flex: 1;"></h6>
+                    <span class="distance-indicator rounded-pill ms-2" style="width: 12px; height: 12px; display: none;"></span>
+                </div>
+                <p class="card-text mb-1" style="font-size: 0.8rem;">
+                    <span class="property-type badge bg-secondary me-1" style="font-size: 0.7rem;"></span>
+                    <span class="property-price fw-bold" style="font-size: 0.85rem;"></span>
+                </p>
+                <p class="card-text mb-2" style="font-size: 0.75rem; color: #6c757d;">
+                    <span class="property-sqft"></span> sq ft
+                </p>
+                <div class="property-amenities">
+                    <span class="amenity cat-friendly d-none">
+                        <span class="badge bg-info" style="font-size: 0.6rem;">Cat Friendly</span>
+                    </span>
+                    <span class="amenity air-conditioning d-none">
+                        <span class="badge bg-info" style="font-size: 0.6rem;">AC</span>
+                    </span>
+                    <span class="amenity parking d-none">
+                        <span class="badge bg-info" style="font-size: 0.6rem;">Parking</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Global variables
+let allProperties = [];
+let filteredProperties = [];
+
+// Color scheme for distance ranking
+const distanceColors = [
+    '#28a745', // Green - Closest
+    '#20c997', // Teal - 2nd
+    '#ffc107', // Yellow - 3rd
+    '#fd7e14', // Orange - 4th
+    '#dc3545'  // Red - 5th
+];
+
+async function loadProperties() {
+    try {
+        const response = await fetch('/api/properties/');
+        if (!response.ok) {
+            throw new Error('Failed to fetch properties');
+        }
+        
+        const properties = await response.json();
+        allProperties = properties;
+        filteredProperties = properties;
+        
+        // Rank properties by distance and display them
+        rankPropertiesByDistance(properties);
+        displayProperties(properties);
+    } catch (error) {
+        console.error('Error loading properties:', error);
+        document.getElementById('propertyListContainer').innerHTML = 
+            '<div class="col-12 text-center py-5"><div class="alert alert-danger">Error loading properties. Please try again later.</div></div>';
+    }
+}
+
+function rankPropertiesByDistance(properties) {
+    // Filter properties that have travel time data
+    const propertiesWithTimes = properties.filter(p => 
+        p.travel_time_830am !== null && 
+        p.travel_time_830am !== undefined && 
+        !isNaN(p.travel_time_830am)
+    );
+    
+    // Sort by Monday 8:30 AM travel time (ascending - shortest first)
+    propertiesWithTimes.sort((a, b) => a.travel_time_830am - b.travel_time_830am);
+    
+    // Assign colors to top 5 closest properties
+    propertiesWithTimes.slice(0, 5).forEach((property, index) => {
+        property.distanceRank = index;
+        property.distanceColor = distanceColors[index];
+    });
+    
+    console.log('Ranked properties:', propertiesWithTimes.map(p => ({
+        address: p.address,
+        travel_time: p.travel_time_830am,
+        rank: p.distanceRank,
+        color: p.distanceColor
+    })));
+}
+
+function displayProperties(properties) {
+    const container = document.getElementById('propertyListContainer');
+    container.innerHTML = '';
+    
+    if (properties.length === 0) {
+        container.innerHTML = `
+            <div class="col-12 text-center py-5">
+                <p>No properties found. <a href="/properties/new">Add your first property</a>.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const template = document.getElementById('propertyCardTemplate');
+    
+    properties.forEach(property => {
+        const clone = template.content.cloneNode(true);
+        
+        // Set property details
+        clone.querySelector('.property-address').textContent = property.address;
+        clone.querySelector('.property-type').textContent = property.property_type;
+        clone.querySelector('.property-price').textContent = `$${property.price_per_month.toLocaleString()}/month`;
+        clone.querySelector('.property-sqft').textContent = property.square_footage.toLocaleString();
+        
+        // Make entire card clickable
+        const card = clone.querySelector('.property-card');
+        card.addEventListener('click', () => {
+            window.location.href = `/properties/${property.id}`;
+        });
+        
+        // Add hover effects
+        card.addEventListener('mouseenter', () => {
+            card.style.transform = 'scale(0.88)';
+            card.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'scale(0.85)';
+            card.style.boxShadow = '';
+        });
+        
+        // Set amenities
+        if (property.cat_friendly) {
+            clone.querySelector('.amenity.cat-friendly').classList.remove('d-none');
+        }
+        if (property.air_conditioning) {
+            clone.querySelector('.amenity.air-conditioning').classList.remove('d-none');
+        }
+        if (property.on_premises_parking) {
+            clone.querySelector('.amenity.parking').classList.remove('d-none');
+        }
+        
+        // Set image if available
+        const mainImage = property.images.find(img => img.is_main);
+        const imgElement = clone.querySelector('.property-image');
+        const noImageElement = clone.querySelector('.no-image');
+        
+        if (mainImage) {
+            imgElement.src = `/static/images/property_${property.id}/${mainImage.filename}`;
+            imgElement.classList.add('visible');
+            noImageElement.classList.add('d-none');
+        } else {
+            imgElement.classList.remove('visible');
+            noImageElement.classList.remove('d-none');
+        }
+        
+        // Set distance indicator - THIS IS THE KEY PART
+        const distanceIndicator = clone.querySelector('.distance-indicator');
+        if (property.distanceRank !== undefined && property.distanceColor) {
+            distanceIndicator.style.backgroundColor = property.distanceColor;
+            distanceIndicator.style.display = 'inline-block';
+            console.log(`Setting color for property ${property.id}: ${property.distanceColor}`);
+        } else {
+            console.log(`No color for property ${property.id}, rank: ${property.distanceRank}, color: ${property.distanceColor}`);
+        }
+        
+        container.appendChild(clone);
+    });
+}
+
+// Search functionality
+window.performSearch = function(query, searchType) {
+    const searchQuery = query.toLowerCase();
+    
+    if (!searchQuery) {
+        filteredProperties = allProperties;
+    } else {
+        filteredProperties = allProperties.filter(property => {
+            switch(searchType) {
+                case 'address':
+                    return property.address.toLowerCase().includes(searchQuery);
+                case 'type':
+                    return property.property_type.toLowerCase().includes(searchQuery);
+                case 'rent':
+                    return property.price_per_month.toString().includes(searchQuery);
+                case 'size':
+                    return property.square_footage.toString().includes(searchQuery);
+                case 'all':
+                default:
+                    return property.address.toLowerCase().includes(searchQuery) ||
+                           property.property_type.toLowerCase().includes(searchQuery) ||
+                           property.price_per_month.toString().includes(searchQuery) ||
+                           property.square_footage.toString().includes(searchQuery);
+            }
+        });
+    }
+    
+    // Re-rank the filtered properties
+    rankPropertiesByDistance(filteredProperties);
+    displayProperties(filteredProperties);
+};
+
+// Handle URL search parameters
+function handleSearchParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const searchQuery = urlParams.get('search');
+    const searchType = urlParams.get('type') || 'all';
+    
+    if (searchQuery) {
+        // Update search form if it exists
+        const searchInput = document.getElementById('searchInput');
+        const searchTypeSelect = document.getElementById('searchType');
+        
+        if (searchInput) searchInput.value = searchQuery;
+        if (searchTypeSelect) searchTypeSelect.value = searchType;
+        
+        // Perform search
+        window.performSearch(searchQuery, searchType);
+    }
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadProperties();
+    handleSearchParams();
+});
+
+// Scroll to bottom functionality
+document.addEventListener('DOMContentLoaded', function() {
+    const scrollBtn = document.getElementById('scrollToBottomBtn');
+    if (scrollBtn) {
+        scrollBtn.addEventListener('click', () => {
+            window.scrollTo({
+                top: document.body.scrollHeight,
+                behavior: 'smooth'
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

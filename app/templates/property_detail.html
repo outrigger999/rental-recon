@@ -1,0 +1,899 @@
+{% extends "base.html" %}
+
+{% block title %}Rental Recon - Property Details{% endblock %}
+
+{% block content %}
+<!-- Image Zoom Modal -->
+<div class="modal fade" id="imageZoomModal" tabindex="-1" aria-labelledby="imageZoomModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="imageZoomModalLabel">Image</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <img id="zoomedImage" src="" class="img-fluid" alt="Zoomed property image">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-3">
+    <a href="/properties" class="btn btn-outline-secondary">
+        &larr; Back to Properties
+    </a>
+</div>
+
+<div id="propertyDetailContainer">
+    <div class="text-center py-5">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Loading property details...</p>
+    </div>
+</div>
+
+<template id="propertyDetailTemplate">
+    <div class="property-detail">
+        <h2 class="property-address mb-4"></h2>
+        
+        <div class="row">
+            <div class="col-12 col-lg-7">
+                <!-- Image carousel -->
+                <div id="propertyCarousel" class="carousel slide mb-4" data-bs-ride="carousel">
+                    <div class="carousel-inner property-images">
+                        <!-- Images will be populated by JavaScript -->
+                    </div>
+                    <button class="carousel-control-prev" type="button" data-bs-target="#propertyCarousel" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next" type="button" data-bs-target="#propertyCarousel" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>
+                
+                <!-- Thumbnail gallery -->
+                <div class="image-thumbnails row g-2 mb-4">
+                    <!-- Will be populated with thumbnails -->
+                </div>
+                
+                <!-- Amenities section moved under image -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Amenities</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="amenities-list">
+                            <span class="amenity cat-friendly badge bg-success me-1 d-none">Cat Friendly</span>
+                            <span class="amenity air-conditioning badge bg-success me-1 d-none">Air Conditioning</span>
+                            <span class="amenity on-premises-parking badge bg-success me-1 d-none">On-premises Parking</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Travel Times section moved under image -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Travel Times (minutes) <small class="text-muted">powered by Google Maps</small></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="travel-times">
+                            <div class="row mb-2">
+                                <div class="col-md-6 mb-2">
+                                    <label for="travel_time_830am" class="form-label">8:30 AM</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="travel_time_830am" name="travel_time_830am" min="0" readonly>
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <label for="travel_time_930am" class="form-label">9:30 AM</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="travel_time_930am" name="travel_time_930am" min="0" readonly>
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-6 mb-2">
+                                    <label for="travel_time_midday" class="form-label">Midday</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="travel_time_midday" name="travel_time_midday" min="0" readonly>
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <label for="travel_time_630pm" class="form-label">6:30 PM</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="travel_time_630pm" name="travel_time_630pm" min="0" readonly>
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-6 mb-2">
+                                    <label for="travel_time_730pm" class="form-label">7:30 PM</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="travel_time_730pm" name="travel_time_730pm" min="0" readonly>
+                                        <span class="input-group-text">min</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="calculateTravelTimes" class="btn btn-sm btn-success w-100">🗺️ Auto-Calculate Travel Times</button>
+                            <small class="text-muted d-block mt-1">Recalculates using Google Maps traffic data</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Route Map Section -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Commute Route Map <small class="text-muted">8:30 AM Monday</small></h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="route-map" style="height: 300px; width: 100%;"></div>
+                        <div class="p-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-muted">Route from property to <span id="global-address-display"></span></small>
+                                </div>
+                                <div id="global-address-changed" class="d-none">
+                                    <button id="recalculateRoutes" class="btn btn-sm btn-warning">Update Route for New Address</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-12 col-lg-5">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Property Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="property-type"></p>
+                        <p class="property-price"></p>
+                        <p class="property-sqft"></p>
+                        
+                        <div class="property-description-section" style="display: none;">
+                            <h5 class="mt-3">Description</h5>
+                            <p class="property-description"></p>
+                        </div>
+                        
+                        <h4 class="mt-4">Contacts</h4>
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <textarea id="contactsField" class="form-control" rows="4" placeholder="Add contact information (landlord, property manager, etc.)..."></textarea>
+                                <div class="mt-2">
+                                    <small class="text-muted">Contact information is saved automatically</small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h4 class="mt-4">Visit Notes</h4>
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div id="notesList" class="notes-list mb-3">
+                                    <!-- Notes will be populated here dynamically -->
+                                    <div class="text-center py-2 text-muted note-placeholder">
+                                        <small>No notes added yet</small>
+                                    </div>
+                                </div>
+                                <div class="add-note-section">
+                                    <textarea id="newNoteContent" class="form-control mb-2" rows="3" placeholder="Add a note about this property..."></textarea>
+                                    <button class="btn btn-sm btn-success" id="addNoteBtn">Add Note</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <a href="#" class="btn btn-primary edit-property-btn">Edit Property</a>
+                    <button class="btn btn-danger delete-property-btn">Delete Property</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<!-- Google Maps API -->
+<script src="https://maps.googleapis.com/maps/api/js?key={{ google_maps_api_key }}&libraries=places&loading=async"></script>
+<style>
+    /* Mobile-specific improvements */
+    @media (max-width: 768px) {
+        .property-address {
+            font-size: 1.5rem;
+            text-align: center;
+        }
+        
+        .input-group-text {
+            font-size: 0.8rem;
+            min-width: 70px;
+        }
+        
+        .travel-times .col-6 {
+            margin-bottom: 0.5rem;
+        }
+        
+        .card-header h5 {
+            font-size: 1rem;
+        }
+        
+        .btn-sm {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+        }
+    }
+    
+    /* Ensure input fields don't get too cramped */
+    .travel-time {
+        min-width: 60px;
+    }
+    
+    /* Make read-only fields look better */
+    input[readonly] {
+        background-color: #f8f9fa;
+        cursor: default;
+        border-color: #dee2e6;
+    }
+    
+    /* Style for Google Maps attribution */
+    .card-header small.text-muted {
+        font-size: 0.75rem;
+        opacity: 0.8;
+    }
+</style>
+
+<script>
+    let propertyId = null;
+
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get property ID from URL
+        const pathParts = window.location.pathname.split('/');
+        propertyId = parseInt(pathParts[pathParts.length - 1]);
+        
+        if (propertyId) {
+            loadPropertyDetails(propertyId);
+            loadPropertyNotes(propertyId);
+        } else {
+            document.getElementById('propertyDetailContainer').innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <h4 class="alert-heading">Error</h4>
+                    <p>Invalid property ID. Please check the URL and try again.</p>
+                    <hr>
+                    <a href="/properties" class="btn btn-outline-danger">Back to Properties</a>
+                </div>
+            `;
+        }
+    });
+
+    async function loadPropertyDetails(id) {
+        try {
+            const response = await fetch(`/api/properties/${id}`);
+            if (!response.ok) {
+                throw new Error('Property not found');
+            }
+            const property = await response.json();
+            displayPropertyDetails(property);
+        } catch (error) {
+            console.error('Error loading property details:', error);
+            document.getElementById('propertyDetailContainer').innerHTML = `
+                <div class="alert alert-danger" role="alert">
+                    <h4 class="alert-heading">Error loading property details</h4>
+                    <p>Property may not exist or has been deleted.</p>
+                    <hr>
+                    <a href="/properties" class="btn btn-outline-danger">Back to Properties</a>
+                </div>
+            `;
+        }
+    }
+    
+    function displayPropertyDetails(property) {
+        // Set property address for map
+        propertyAddress = property.address;
+        // Always set globalAddress to HQ if not set by settings (for route)
+        if (!globalAddress || globalAddress.trim() === '') {
+            globalAddress = 'Alaska Airlines Headquarters, 19300 International Blvd, SeaTac, WA 98188';
+        }
+        
+        const container = document.getElementById('propertyDetailContainer');
+        const template = document.getElementById('propertyDetailTemplate');
+        const clone = template.content.cloneNode(true);
+        
+        // Set property details
+        clone.querySelector('.property-address').textContent = property.address;
+        clone.querySelector('.property-type').textContent = `Property Type: ${property.property_type}`;
+        clone.querySelector('.property-price').textContent = `Monthly Rent: $${property.price_per_month.toLocaleString()}`;
+        clone.querySelector('.property-sqft').textContent = `Size: ${property.square_footage.toLocaleString()} sq ft`;
+        
+        // Set description if available
+        if (property.description) {
+            const descSection = clone.querySelector('.property-description-section');
+            descSection.style.display = 'block';
+            clone.querySelector('.property-description').textContent = property.description;
+        }
+        
+        // Set contacts field
+        const contactsField = clone.querySelector('#contactsField');
+        if (contactsField && property.contacts) {
+            contactsField.value = property.contacts;
+        }
+        
+        // Set edit link
+        clone.querySelector('.edit-property-btn').href = `/properties/${property.id}/edit`;
+        
+        // Set amenities
+        if (property.cat_friendly) {
+            clone.querySelector('.amenity.cat-friendly').classList.remove('d-none');
+        }
+        if (property.air_conditioning) {
+            clone.querySelector('.amenity.air-conditioning').classList.remove('d-none');
+        }
+        if (property.on_premises_parking) {
+            clone.querySelector('.amenity.on-premises-parking').classList.remove('d-none');
+        }
+        
+        // Set travel times and display ranges
+        const travelTimeFields = ['830am', '930am', 'midday', '630pm', '730pm'];
+        travelTimeFields.forEach(time => {
+            const field = clone.querySelector(`#travel_time_${time}`);
+            if (field && property[`travel_time_${time}`]) {
+                field.value = property[`travel_time_${time}`];
+                
+                // Always show range display below each input
+                const parentDiv = field.closest('.input-group').parentElement;
+                let rangeDisplay = parentDiv.querySelector('.range-display');
+                if (!rangeDisplay) {
+                    rangeDisplay = document.createElement('small');
+                    rangeDisplay.className = 'range-display text-muted';
+                    parentDiv.appendChild(rangeDisplay);
+                }
+                
+                // Check if we have display range data from backend
+                const displayTime = property[`travel_time_${time}_display`];
+                if (displayTime && displayTime !== 'N/A') {
+                    field.setAttribute('title', `Google Maps range: ${displayTime} min (using ${Math.round(property[`travel_time_${time}`])} min for planning)`);
+                    rangeDisplay.textContent = `${displayTime} min`;
+                } else {
+                    // Show estimated range based on conservative value
+                    const conservativeTime = property[`travel_time_${time}`];
+                    const minTime = Math.max(1, Math.round(conservativeTime * 0.7));
+                    const maxTime = Math.round(conservativeTime * 1.0); // Conservative is already the max
+                    const estimatedRange = `${minTime}-${maxTime}`;
+                    field.setAttribute('title', `Estimated range: ${estimatedRange} min (using ${Math.round(conservativeTime)} min for planning)`);
+                    rangeDisplay.textContent = `${estimatedRange} min`;
+                }
+            }
+        });
+        
+        // Handle images
+        const carouselInner = clone.querySelector('.property-images');
+        if (property.images && property.images.length > 0) {
+            property.images.forEach((image, index) => {
+                const carouselItem = document.createElement('div');
+                carouselItem.className = `carousel-item ${index === 0 ? 'active' : ''}`;
+                carouselItem.innerHTML = `
+                    <img src="/static/images/property_${property.id}/${image.filename}" 
+                         class="d-block w-100 zoomable-image" 
+                         alt="Property image"
+                         data-bs-toggle="modal" 
+                         data-bs-target="#imageZoomModal"
+                         style="cursor: zoom-in;">
+                `;
+                carouselInner.appendChild(carouselItem);
+            });
+        } else {
+            carouselInner.innerHTML = `
+                <div class="carousel-item active">
+                    <div class="d-block w-100 bg-light text-center p-5">
+                        <i class="bi bi-card-image fs-1"></i>
+                        <p>No images available</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Replace container content
+        container.innerHTML = '';
+        container.appendChild(clone);
+        
+        // Add event listeners
+        setupEventListeners();
+    }
+    
+    function setupEventListeners() {
+        // Image zoom functionality
+        document.querySelectorAll('.zoomable-image').forEach(img => {
+            img.addEventListener('click', function() {
+                document.getElementById('zoomedImage').src = this.src;
+            });
+        });
+        
+        // Calculate travel times
+        document.getElementById('calculateTravelTimes').addEventListener('click', calculateTravelTimes);
+        
+        // Delete property
+        document.querySelector('.delete-property-btn').addEventListener('click', confirmDeleteProperty);
+        
+        // Add note
+        document.getElementById('addNoteBtn').addEventListener('click', addNote);
+        
+        // Setup automatic saving for contacts
+        setupContactsAutoSave();
+        
+        // Auto-calculate travel times if they're empty
+        autoCalculateTravelTimesIfEmpty();
+        
+        // Setup route map
+        fetchGlobalAddress().then(() => {
+            initRouteMap();
+            setupRouteRecalculation();
+        });
+    }
+    
+    function confirmDeleteProperty() {
+        if (confirm('Are you sure you want to delete this property? This action cannot be undone.')) {
+            deleteProperty(propertyId);
+        }
+    }
+
+    async function deleteProperty(id) {
+        try {
+            const response = await fetch(`/api/properties/${id}`, {
+                method: 'DELETE'
+            });
+            
+            if (response.ok) {
+                alert('Property deleted successfully');
+                window.location.href = '/properties';
+            } else {
+                throw new Error('Failed to delete property');
+            }
+        } catch (error) {
+            console.error('Error deleting property:', error);
+            alert('An error occurred while deleting the property. Please try again.');
+        }
+    }
+
+    async function saveTravelTimes() {
+        const travelTimes = {
+            travel_time_830am: document.getElementById('travel_time_830am').value || null,
+            travel_time_930am: document.getElementById('travel_time_930am').value || null,
+            travel_time_midday: document.getElementById('travel_time_midday').value || null,
+            travel_time_630pm: document.getElementById('travel_time_630pm').value || null,
+            travel_time_730pm: document.getElementById('travel_time_730pm').value || null
+        };
+
+        // Convert empty strings to null and numbers to floats
+        Object.keys(travelTimes).forEach(key => {
+            if (travelTimes[key] === '' || travelTimes[key] === null) {
+                travelTimes[key] = null;
+            } else {
+                travelTimes[key] = parseFloat(travelTimes[key]);
+            }
+        });
+
+        try {
+            const response = await fetch(`/api/properties/${propertyId}/travel-times`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(travelTimes)
+            });
+
+            if (response.ok) {
+                alert('Travel times saved successfully!');
+            } else {
+                throw new Error('Failed to save travel times');
+            }
+        } catch (error) {
+            console.error('Error saving travel times:', error);
+            alert('An error occurred while saving travel times. Please try again.');
+        }
+    }
+
+    async function loadPropertyNotes(propertyId) {
+        try {
+            const response = await fetch(`/api/properties/${propertyId}/notes`);
+            if (!response.ok) {
+                throw new Error('Failed to load notes');
+            }
+            const notes = await response.json();
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                displayNotes(notes);
+            }, 500);
+        } catch (error) {
+            console.error('Error loading notes:', error);
+        }
+    }
+
+    function displayNotes(notes) {
+        const notesList = document.getElementById('notesList');
+        if (!notesList) {
+            console.error('Notes list element not found');
+            return;
+        }
+        
+        notesList.innerHTML = '';
+        
+        if (notes && notes.length > 0) {
+            notes.forEach(note => {
+                const noteElement = createNoteElement(note);
+                notesList.appendChild(noteElement);
+            });
+        } else {
+            notesList.innerHTML = `
+                <div class="text-center py-2 text-muted note-placeholder">
+                    <small>No notes added yet</small>
+                </div>
+            `;
+        }
+    }
+
+    function createNoteElement(note) {
+        const noteDiv = document.createElement('div');
+        noteDiv.className = 'note-item border-bottom pb-2 mb-2';
+        noteDiv.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <p class="mb-1">${note.content}</p>
+                    <small class="text-muted">${new Date(note.created_at).toLocaleString()}</small>
+                </div>
+                <button class="btn btn-sm btn-outline-danger ms-2" onclick="deleteNote(${note.id})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        return noteDiv;
+    }
+
+    async function addNote() {
+        const content = document.getElementById('newNoteContent').value.trim();
+        if (!content) {
+            alert('Please enter a note before adding.');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/properties/${propertyId}/notes`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ content: content })
+            });
+
+            if (response.ok) {
+                document.getElementById('newNoteContent').value = '';
+                loadPropertyNotes(propertyId); // Reload notes
+            } else {
+                throw new Error('Failed to add note');
+            }
+        } catch (error) {
+            console.error('Error adding note:', error);
+            alert('An error occurred while adding the note. Please try again.');
+        }
+    }
+
+    async function deleteNote(noteId) {
+        if (!confirm('Are you sure you want to delete this note?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/properties/${propertyId}/notes/${noteId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                loadPropertyNotes(propertyId); // Reload notes
+            } else {
+                throw new Error('Failed to delete note');
+            }
+        } catch (error) {
+            console.error('Error deleting note:', error);
+            alert('An error occurred while deleting the note. Please try again.');
+        }
+    }
+
+    let lastSavedValue = '';
+    
+    function setupContactsAutoSave() {
+        const contactsField = document.getElementById('contactsField');
+        let saveTimeout;
+        lastSavedValue = contactsField.value;
+        
+        // Auto-save on input with debouncing (wait 2 seconds after user stops typing)
+        contactsField.addEventListener('input', function() {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                if (contactsField.value !== lastSavedValue) {
+                    saveContactsAutomatically();
+                }
+            }, 2000);
+        });
+        
+        // Also save when user leaves the field
+        contactsField.addEventListener('blur', function() {
+            clearTimeout(saveTimeout);
+            if (contactsField.value !== lastSavedValue) {
+                saveContactsAutomatically();
+            }
+        });
+    }
+    
+    async function saveContactsAutomatically() {
+        const contactsField = document.getElementById('contactsField');
+        
+        try {
+            const response = await fetch(`/api/properties/${propertyId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    contacts: contactsField.value
+                })
+            });
+            
+            if (response.ok) {
+                // Update the last saved value
+                lastSavedValue = contactsField.value;
+                console.log('Contacts saved automatically');
+            } else {
+                console.error('Failed to auto-save contacts');
+            }
+        } catch (error) {
+            console.error('Error auto-saving contacts:', error);
+        }
+    }
+
+    async function calculateTravelTimes(useTuesday = false, dayOffset = 0) {
+        const button = document.getElementById('calculateTravelTimes');
+        const originalText = button.innerHTML;
+        
+        try {
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Calculating...';
+            
+            // Build the URL with query parameters for alternate day calculation
+            let url = `/api/properties/${propertyId}/calculate-travel-times`;
+            if (useTuesday || dayOffset !== 0) {
+                url += `?use_tuesday=${useTuesday}&day_offset=${dayOffset}`;
+            }
+            
+            const response = await fetch(url, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                const updatedProperty = await response.json();
+                
+                // Update the travel time fields with calculated values
+                const travelTimeFields = ['830am', '930am', 'midday', '630pm', '730pm'];
+                travelTimeFields.forEach(time => {
+                    const field = document.getElementById(`travel_time_${time}`);
+                    if (field && updatedProperty[`travel_time_${time}`]) {
+                        // Use the conservative (max) time for the input field
+                        field.value = Math.round(updatedProperty[`travel_time_${time}`]);
+                        
+                        // If we have display format, show it as placeholder or title
+                        const displayTime = updatedProperty[`travel_time_${time}_display`];
+                        // Always show a range display, even if value is 'N/A'
+                        const parentDiv = field.closest('.input-group').parentElement;
+                        let rangeDisplay = parentDiv.querySelector('.range-display');
+                        if (!rangeDisplay) {
+                            rangeDisplay = document.createElement('small');
+                            rangeDisplay.className = 'range-display text-muted';
+                            parentDiv.appendChild(rangeDisplay);
+                        }
+                        if (displayTime && displayTime !== 'N/A') {
+                            field.setAttribute('title', `Google Maps range: ${displayTime} min (using ${Math.round(updatedProperty[`travel_time_${time}`])} min for planning)`);
+                            rangeDisplay.textContent = `${displayTime} min`;
+                        } else {
+                            field.setAttribute('title', `No Google Maps range available; using ${Math.round(updatedProperty[`travel_time_${time}`])} min for planning`);
+                            rangeDisplay.textContent = `N/A`;
+                        }
+                    }
+                });
+                
+                // Check for anomalies and offer alternate day calculation
+                const anomalies = Object.keys(updatedProperty).filter(key => key.endsWith('_anomaly') && updatedProperty[key]);
+                if (anomalies.length > 0 && !useTuesday && dayOffset === 0) {
+                    if (confirm('Unusually high traffic detected, possibly due to an incident. Would you like to try calculating for Tuesday instead?')) {
+                        // Recalculate for Tuesday
+                        calculateTravelTimes(true, 0);
+                        return;
+                    }
+                }
+                
+                // Update the map with new route if global address has changed
+                if (globalAddress) {
+                    displayRoute();
+                }
+                
+                alert('Travel times calculated successfully!');
+            } else {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to calculate travel times');
+            }
+        } catch (error) {
+            console.error('Error calculating travel times:', error);
+            alert(`Error calculating travel times: ${error.message}`);
+        } finally {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    }
+    
+    // Fetch global address from settings
+    async function fetchGlobalAddress() {
+        try {
+            const response = await fetch('/api/settings');
+            if (response.ok) {
+                const settings = await response.json();
+                if (settings && settings.origin_address) {
+                    // Store previous address for change detection
+                    previousGlobalAddress = globalAddress;
+                    globalAddress = settings.origin_address;
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching global address:', error);
+        } finally {
+            // Always initialize map with whatever address is set (default or from settings)
+            initRouteMap();
+        }
+    }
+
+    function autoCalculateTravelTimesIfEmpty() {
+        // Check if any travel time fields are empty
+        const travelTimeFields = ['830am', '930am', 'midday', '630pm', '730pm'];
+        const hasEmptyFields = travelTimeFields.some(time => {
+            const field = document.getElementById(`travel_time_${time}`);
+            return field && (!field.value || field.value.trim() === '');
+        });
+        
+        // Auto-calculate if there are empty fields
+        if (hasEmptyFields) {
+            setTimeout(() => {
+                if (confirm('Would you like to automatically calculate travel times using Google Maps?')) {
+                    calculateTravelTimes();
+                }
+            }, 1000); // Small delay to let the page fully load
+        }
+    }
+    
+    // Global variables for map and route
+    let map;
+    let directionsService;
+    let directionsRenderer;
+    let propertyAddress = '';
+    // Default to Alaska Airlines HQ unless overridden by settings
+    let globalAddress = 'Alaska Airlines Headquarters, 19300 International Blvd, SeaTac, WA 98188';
+    let previousGlobalAddress = '';
+    
+    // Initialize map when the property details are loaded
+    function initRouteMap() {
+        // Check if Google Maps API is loaded
+        if (typeof google === 'undefined') {
+            console.error('Google Maps API not loaded');
+            return;
+        }
+        
+        // Initialize the map with default center
+        map = new google.maps.Map(document.getElementById('route-map'), {
+            zoom: 12,
+            center: { lat: 47.6062, lng: -122.3321 } // Default to Seattle
+        });
+        
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer({
+            map: map,
+            suppressMarkers: false,
+            polylineOptions: {
+                strokeColor: '#0066cc',
+                strokeWeight: 5,
+                strokeOpacity: 0.7
+            }
+        });
+        
+        // Display route if we have both addresses
+        if (propertyAddress && globalAddress) {
+            displayRoute();
+        }
+    }
+    
+
+    
+    // Display route between property and global address
+    function displayRoute() {
+        console.log('displayRoute called with:', { propertyAddress, globalAddress });
+        
+        if (!propertyAddress || !globalAddress) {
+            console.error('Missing addresses for route:', { propertyAddress, globalAddress });
+            return;
+        }
+        
+        // Update the global address display
+        const globalAddressDisplay = document.getElementById('global-address-display');
+        if (globalAddressDisplay) {
+            globalAddressDisplay.textContent = globalAddress;
+        }
+        
+        console.log('Requesting directions from', propertyAddress, 'to', globalAddress);
+        console.log('Using API key:', '{{ google_maps_api_key }}');
+        
+        // Calculate and display the route
+        directionsService.route({
+            origin: propertyAddress,
+            destination: globalAddress,
+            travelMode: google.maps.TravelMode.DRIVING
+            // Removed drivingOptions as they might cause REQUEST_DENIED
+        }, (response, status) => {
+            console.log('Directions API response:', { status, response });
+            if (status === 'OK') {
+                directionsRenderer.setDirections(response);
+                console.log('Route displayed successfully');
+                
+                // Check if global address has changed
+                if (previousGlobalAddress && previousGlobalAddress !== globalAddress) {
+                    document.getElementById('global-address-changed').classList.remove('d-none');
+                }
+            } else {
+                console.error('Directions request failed:', { status, propertyAddress, globalAddress });
+                let errorMsg = `Could not display route: ${status}`;
+                if (status === 'REQUEST_DENIED') {
+                    errorMsg += ' (API key may not have Directions API enabled)';
+                } else if (status === 'ZERO_RESULTS') {
+                    errorMsg += ' (No route found between addresses)';
+                } else if (status === 'OVER_QUERY_LIMIT') {
+                    errorMsg += ' (API quota exceeded)';
+                }
+                alert(errorMsg);
+            }
+        });
+    }
+    
+    // Get next Monday morning at specified hour and minute
+    function getNextMondayMorning(hour, minute) {
+        const now = new Date();
+        const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ...
+        const daysUntilMonday = dayOfWeek <= 1 ? 1 - dayOfWeek : 8 - dayOfWeek;
+        
+        const nextMonday = new Date(now);
+        nextMonday.setDate(now.getDate() + daysUntilMonday);
+        nextMonday.setHours(hour, minute, 0, 0);
+        
+        return nextMonday;
+    }
+    
+    // Handle recalculation of routes when global address changes
+    function setupRouteRecalculation() {
+        const recalcButton = document.getElementById('recalculateRoutes');
+        if (recalcButton) {
+            recalcButton.addEventListener('click', () => {
+                if (confirm('Would you like to recalculate travel times and routes for the new global address?')) {
+                    // Store current global address as previous
+                    previousGlobalAddress = globalAddress;
+                    
+                    // Recalculate travel times
+                    calculateTravelTimes();
+                    
+                    // Hide the button after recalculation
+                    document.getElementById('global-address-changed').classList.add('d-none');
+                }
+            });
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+
+{% block title %}Rental Recon - Add New Property{% endblock %}
+
+{% block content %}
+<h2>Add New Property</h2>
+<form id="propertyForm" class="needs-validation" novalidate>
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <label for="address" class="form-label">Address</label>
+            <input type="text" class="form-control" id="address" name="address" required>
+            <div class="invalid-feedback">
+                Please provide a property address.
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <label for="property_type" class="form-label">Property Type</label>
+            <select class="form-select" id="property_type" name="property_type" required>
+                <option value="" disabled selected>Select type...</option>
+                <option value="Home">Home</option>
+                <option value="Townhome">Townhome</option>
+                <option value="Apartment">Apartment</option>
+            </select>
+            <div class="invalid-feedback">
+                Please select a property type.
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label for="price_per_month" class="form-label">Monthly Rent ($)</label>
+            <input type="number" class="form-control" id="price_per_month" name="price_per_month" min="0" step="0.01" required>
+            <div class="invalid-feedback">
+                Please provide a valid monthly rent.
+            </div>
+        </div>
+        <div class="col-md-4">
+            <label for="squareFootage" class="form-label">Square Footage</label>
+            <input type="number" class="form-control" id="squareFootage" name="square_footage" min="1" step="1" required>
+            <div class="invalid-feedback">
+                Please provide valid square footage.
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <label for="description" class="form-label">Property Description</label>
+            <textarea class="form-control" id="description" name="description" rows="4" placeholder="Enter details about the property..."></textarea>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <label class="form-label">Amenities</label>
+            <div class="d-flex flex-wrap gap-4">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="cat_friendly" name="cat_friendly">
+                    <label class="form-check-label" for="cat_friendly">
+                        Cat Friendly
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="air_conditioning" name="air_conditioning">
+                    <label class="form-check-label" for="air_conditioning">
+                        Air Conditioning
+                    </label>
+                </div>
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="on_premises_parking" name="on_premises_parking">
+                    <label class="form-check-label" for="on_premises_parking">
+                        On-premises Parking
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <label class="form-label">Main Image</label>
+            <div id="mainImageDropzone" class="image-dropzone">
+                <div class="dropzone-content">
+                    <div class="text-content">
+                        <p>Paste main image here (Ctrl+V/⌘+V) or click to upload</p>
+                        <input type="file" id="mainImageInput" class="d-none" accept="image/*">
+                    </div>
+                    <div id="mainImagePreview" class="image-preview d-none">
+                        <img src="" alt="Main property image" class="img-fluid">
+                        <button type="button" class="btn btn-sm btn-danger remove-image">Remove</button>
+                    </div>
+                    <div id="pasteIndicator" class="paste-indicator d-none">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <span>Image pasted! Processing...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <label class="form-label">Additional Images</label>
+            <div id="additionalImagesContainer">
+                <!-- Additional image upload items will be added here -->
+            </div>
+            <button type="button" id="addImageBtn" class="btn btn-outline-secondary mt-2">
+                <i class="bi bi-plus-circle"></i> Add Another Image
+            </button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <button type="submit" id="submitBtn" class="btn btn-primary">Save Property</button>
+            <a href="/properties" class="btn btn-outline-secondary ms-2">Cancel</a>
+        </div>
+    </div>
+</form>
+
+<template id="additionalImageTemplate">
+    <div class="additional-image-item mb-3">
+        <div class="image-dropzone">
+            <div class="dropzone-content">
+                <div class="text-content">
+                    <p>Click to upload image</p>
+                    <input type="file" class="additional-image-input d-none" accept="image/*">
+                </div>
+                <div class="image-preview d-none">
+                    <img src="" alt="Property image" class="img-fluid">
+                    <button type="button" class="btn btn-sm btn-danger remove-image">Remove</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let propertyId = null;
+    let mainImageData = null;
+    let additionalImages = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle form submission
+        const form = document.getElementById('propertyForm');
+        form.addEventListener('submit', handleFormSubmit);
+        
+        // Set up image paste and drop functionality for main image
+        const mainImageDropzone = document.getElementById('mainImageDropzone');
+        const mainImageInput = document.getElementById('mainImageInput');
+        const pasteIndicator = document.getElementById('pasteIndicator');
+        
+        // Handle paste events for main image
+        document.addEventListener('paste', function(event) {
+            // Always capture paste events anywhere in the document
+            handlePaste(event);
+        });
+        
+        // Handle click on the dropzone to trigger file input
+        mainImageDropzone.addEventListener('click', function() {
+            mainImageInput.click();
+        });
+        
+        // Handle file selection for main image
+        mainImageInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                handleFileSelect(this.files[0], 'main');
+            }
+        });
+        
+        // Handle remove main image button
+        document.querySelector('#mainImagePreview .remove-image').addEventListener('click', function() {
+            resetMainImage();
+        });
+        
+        // Handle add additional image button
+        document.getElementById('addImageBtn').addEventListener('click', addAdditionalImageField);
+    });
+
+    function handlePaste(event) {
+        // Show paste indicator
+        const pasteIndicator = document.getElementById('pasteIndicator');
+        pasteIndicator.classList.remove('d-none');
+        
+        // Get clipboard items
+        const clipboardData = event.clipboardData || window.clipboardData;
+        const items = clipboardData.items || [];
+        
+        let foundImage = false;
+        
+        // Try to get image from clipboard items
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') === 0) {
+                foundImage = true;
+                const blob = items[i].getAsFile();
+                processImageBlob(blob);
+                break;
+            }
+        }
+        
+        // If no image found in items, try to get from files (for SnagIt compatibility)
+        if (!foundImage && clipboardData.files && clipboardData.files.length > 0) {
+            const file = clipboardData.files[0];
+            if (file.type.indexOf('image') === 0) {
+                foundImage = true;
+                processImageBlob(file);
+            }
+        }
+        
+        if (!foundImage) {
+            pasteIndicator.classList.add('d-none');
+            // Don't show alert as it might be disruptive when pasting text elsewhere
+        }
+    }
+    
+    function processImageBlob(blob) {
+        // Convert blob to base64
+        const reader = new FileReader();
+        const pasteIndicator = document.getElementById('pasteIndicator');
+        
+        reader.onload = function(e) {
+            // Hide paste indicator after image is processed
+            pasteIndicator.classList.add('d-none');
+            
+            // Store image data
+            mainImageData = e.target.result;
+            
+            // Show image preview
+            const mainImagePreview = document.getElementById('mainImagePreview');
+            const img = mainImagePreview.querySelector('img');
+            img.src = mainImageData;
+            
+            // Show preview, hide text content
+            mainImagePreview.classList.remove('d-none');
+            document.querySelector('#mainImageDropzone .text-content').classList.add('d-none');
+        };
+        reader.readAsDataURL(blob);
+    }
+
+    function handleFileSelect(file, type) {
+        const reader = new FileReader();
+        
+        reader.onload = function(e) {
+            if (type === 'main') {
+                // Store main image data
+                mainImageData = e.target.result;
+                
+                // Show image preview
+                const mainImagePreview = document.getElementById('mainImagePreview');
+                const img = mainImagePreview.querySelector('img');
+                img.src = mainImageData;
+                
+                // Show preview, hide text content
+                mainImagePreview.classList.remove('d-none');
+                document.querySelector('#mainImageDropzone .text-content').classList.add('d-none');
+            } else {
+                // For additional images
+                const imageItem = document.querySelector(`[data-image-index="${type}"]`);
+                if (imageItem) {
+                    const preview = imageItem.querySelector('.image-preview');
+                    const img = preview.querySelector('img');
+                    img.src = e.target.result;
+                    
+                    // Store additional image data
+                    additionalImages[type] = e.target.result;
+                    
+                    // Show preview, hide text content
+                    preview.classList.remove('d-none');
+                    imageItem.querySelector('.text-content').classList.add('d-none');
+                }
+            }
+        };
+        
+        reader.readAsDataURL(file);
+    }
+
+    function resetMainImage() {
+        mainImageData = null;
+        
+        const mainImagePreview = document.getElementById('mainImagePreview');
+        mainImagePreview.classList.add('d-none');
+        mainImagePreview.querySelector('img').src = '';
+        
+        document.querySelector('#mainImageDropzone .text-content').classList.remove('d-none');
+    }
+
+    function addAdditionalImageField() {
+        const container = document.getElementById('additionalImagesContainer');
+        const template = document.getElementById('additionalImageTemplate');
+        
+        // Clone template content
+        const newImageItem = template.content.cloneNode(true).firstElementChild;
+        
+        // Set unique identifier
+        const index = container.children.length;
+        newImageItem.dataset.imageIndex = index;
+        
+        // Set up event listeners
+        const fileInput = newImageItem.querySelector('.additional-image-input');
+        fileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                handleFileSelect(this.files[0], index);
+            }
+        });
+        
+        newImageItem.querySelector('.image-dropzone').addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        newImageItem.querySelector('.remove-image').addEventListener('click', function() {
+            removeAdditionalImage(newImageItem);
+        });
+        
+        // Add to container
+        container.appendChild(newImageItem);
+    }
+
+    function removeAdditionalImage(element) {
+        const index = element.dataset.imageIndex;
+        if (additionalImages[index]) {
+            delete additionalImages[index];
+        }
+        element.remove();
+    }
+
+    async function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        // Form validation
+        if (!this.checkValidity()) {
+            e.stopPropagation();
+            this.classList.add('was-validated');
+            return;
+        }
+        
+        // Disable submit button to prevent double submission
+        const submitBtn = document.getElementById('submitBtn');
+        const originalBtnText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+        
+        try {
+            // Gather form data
+            const formData = new FormData(this);
+            
+            // Add boolean values for checkboxes
+            formData.set('cat_friendly', document.getElementById('cat_friendly').checked);
+            formData.set('air_conditioning', document.getElementById('air_conditioning').checked);
+            formData.set('on_premises_parking', document.getElementById('on_premises_parking').checked);
+            
+            // Step 1: Create property
+            const propertyResponse = await fetch('/api/properties/', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!propertyResponse.ok) {
+                throw new Error('Failed to create property');
+            }
+            
+            const propertyData = await propertyResponse.json();
+            propertyId = propertyData.id;
+            
+            // Step 2: Upload main image if available
+            if (mainImageData) {
+                const mainImageResponse = await fetch(`/api/properties/${propertyId}/paste`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        image_data: mainImageData.split(',')[1], // Remove data URL prefix
+                        is_main: true
+                    })
+                });
+                
+                if (!mainImageResponse.ok) {
+                    throw new Error('Failed to upload main image');
+                }
+            }
+            
+            // Step 3: Upload additional images if available
+            const additionalImagePromises = Object.values(additionalImages).filter(Boolean).map(async (imageData, index) => {
+                const imageResponse = await fetch(`/api/properties/${propertyId}/paste`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        image_data: imageData.split(',')[1], // Remove data URL prefix
+                        is_main: false
+                    })
+                });
+                
+                if (!imageResponse.ok) {
+                    throw new Error(`Failed to upload additional image ${index + 1}`);
+                }
+                
+                return imageResponse.json();
+            });
+            
+            await Promise.all(additionalImagePromises);
+            
+            // Redirect to property detail page
+            window.location.href = `/properties/${propertyId}`;
+            
+        } catch (error) {
+            console.error('Error saving property:', error);
+            alert('An error occurred while saving the property. Please try again.');
+            
+            // Re-enable submit button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+        }
+    }
+</script>
+{% endblock %}
