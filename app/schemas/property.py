@@ -15,6 +15,12 @@ class PropertyImage(PropertyImageBase):
     id: int
     filename: str
     property_id: int
+    width: Optional[int] = None
+    height: Optional[int] = None
+    format: Optional[str] = None
+    size_kb: Optional[float] = None
+    is_optimized: bool = False
+    original_format: Optional[str] = None
 
     class Config:
         orm_mode = True

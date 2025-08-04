@@ -18,6 +18,7 @@
 - [x] Commute route map rendered using Google Maps API (shows route between property and global address)
 - [ ] Data backup/export feature (future enhancement)
 - [ ] Sorting and filtering options (future enhancement)
+- [ ] Image metadata display (dimensions, format, size) - deferred feature
 
 ## Completion Criteria
 - [x] Application runs locally

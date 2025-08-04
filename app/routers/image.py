@@ -54,7 +54,7 @@ async def process_and_save_image(
     
     try:
         # Process and optimize the image
-        processed_image, new_filename, metadata = await _process_uploaded_image(file, image_dir)
+        processed_image, new_filename, metadata = _process_uploaded_image(file, image_dir)
         
         # If this is the main image and there's an existing main image, update it
         if is_main:
@@ -94,7 +94,7 @@ async def process_and_save_image(
         raise
 
 
-async def _process_uploaded_image(
+def _process_uploaded_image(
     file: UploadFile,
     output_dir: str
 ) -> Tuple[bytes, str, dict]:
@@ -113,7 +113,8 @@ async def _process_uploaded_image(
         image_processor = ImageProcessor()
         
         # Process the image and get metadata
-        processed_data, new_filename, metadata = await image_processor.process_uploaded_file(
+        # Remove 'await' as process_uploaded_file is not an async method
+        processed_data, new_filename, metadata = image_processor.process_uploaded_file(
             file=file,
             target_format='JPEG'  # Convert all to JPEG for consistency
         )
@@ -140,8 +141,7 @@ async def upload_image(
     """
     Upload and optimize an image file for a property.
     
-    Supports various image formats including HEIC/HEIF (automatically converted to JPEG).
-    Images are automatically optimized for web use.
+    Supports JPEG, PNG, and WEBP formats. Images are automatically optimized for web use.
     """
     # Check if property exists
     db_property = db.query(Property).filter(Property.id == property_id).first()
@@ -201,10 +201,12 @@ async def paste_image(
             detail="Property not found"
         )
     
+
+    
     try:
         # Process the base64 image data and get metadata
         image_processor = ImageProcessor()
-        processed_data, metadata = await image_processor.process_base64_image(
+        processed_data, metadata = image_processor.process_base64_image(
             data["image_data"],
             target_format='JPEG'  # Convert to JPEG for consistency
         )

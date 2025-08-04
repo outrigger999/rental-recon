@@ -3,10 +3,6 @@ import io
 from pathlib import Path
 from typing import Tuple, Optional, Union, BinaryIO
 from PIL import Image, ImageOps
-from pillow_heif import register_heif_opener
-
-# Register HEIF/HEIC opener
-register_heif_opener()
 
 class ImageProcessor:
     """
@@ -46,8 +42,6 @@ class ImageProcessor:
             return 'PNG'
         elif ext == '.webp':
             return 'WEBP'
-        elif ext in ['.heic', '.heif']:
-            return 'JPEG'  # Will be converted to JPEG
         return 'JPEG'  # Default to JPEG
     
     @classmethod
@@ -113,7 +107,7 @@ class ImageProcessor:
         max_dimensions: Optional[Tuple[int, int]] = None
     ) -> Tuple[bytes, str, dict]:
         """
-        Process an uploaded file, handling HEIC/HEIF conversion if needed.
+        Process an uploaded file and optimize it for web use.
         
         Args:
             file: FastAPI UploadFile object
@@ -166,7 +160,6 @@ class ImageProcessor:
         }
         
         return optimized_data, filename, metadata
-
     @classmethod
     def process_base64_image(
         cls,

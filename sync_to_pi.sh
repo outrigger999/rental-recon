@@ -1,7 +1,11 @@
 #!/bin/bash
 
 # Rental Recon Sync Script
-# Version 1.0
+# Version 1.1
+#
+# Changelog:
+# 1.1 - Added detailed server restart logging and version display
+# 1.0 - Initial version
 #
 # This script syncs the project files to the Raspberry Pi and restarts the service
 # It includes a dry-run option, better error handling, conda environment support,
@@ -22,7 +26,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Constants
-VERSION="1.0"
+VERSION="1.1"
 
 # Function to display messages
 print_message() {
@@ -156,109 +160,24 @@ else
     
     # Execute commands on the Pi
     print_message "Executing setup commands on $REMOTE_HOST..."
-    ssh $REMOTE_HOST UPDATE_CONDA=$UPDATE_CONDA TARGET_BRANCH="$TARGET_BRANCH" << 'EOF'
-        # Define colors directly in the SSH session
-        GREEN='\033[0;32m'
-        YELLOW='\033[1;33m'
-        RED='\033[0;31m'
-        NC='\033[0m'
-        
-        # Navigate to the project directory
-        cd ~/rental-recon/
-        
-        # Check if we're in the right directory
-        if [ ! -f "requirements.txt" ]; then
-            echo -e "${RED}[ERROR]${NC} Not in the correct project directory or requirements.txt not found!"
-            exit 1
-        fi
-        
-        echo -e "${GREEN}[INFO]${NC} Current directory: $(pwd)"
-        
-        # Initialize conda for bash if not already done
-        if ! command -v conda &> /dev/null; then
-            echo -e "${YELLOW}[WARNING]${NC} Conda not found in PATH, attempting to initialize..."
-            source ~/miniconda3/etc/profile.d/conda.sh
-        fi
-        
-        # Activate the conda environment
-        echo -e "${GREEN}[INFO]${NC} Activating conda environment: rental-recon"
-        conda activate rental-recon
-        
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}[ERROR]${NC} Failed to activate conda environment 'rental-recon'!"
-            exit 1
-        fi
-        
-        # Verify Python version
-        PYTHON_VERSION=$(python --version 2>&1)
-        echo -e "${GREEN}[INFO]${NC} Using Python: $PYTHON_VERSION"
-        
-        # Update conda environment if requested
-        if [ "$UPDATE_CONDA" = "true" ]; then
-            echo -e "${GREEN}[INFO]${NC} Updating conda environment..."
-            conda env update -f environment.yml || echo -e "${YELLOW}[WARNING]${NC} No environment.yml found, skipping conda update"
-        fi
-        
-        # Install/update Python dependencies
-        echo -e "${GREEN}[INFO]${NC} Installing/updating Python dependencies..."
-        pip install -r requirements.txt
-        
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}[ERROR]${NC} Failed to install Python dependencies!"
-            exit 1
-        fi
-        
-        # Check if we need to switch branches
-        if [ -n "$TARGET_BRANCH" ] && [ "$TARGET_BRANCH" != "main" ] && [ "$TARGET_BRANCH" != "master" ]; then
-            echo -e "${GREEN}[INFO]${NC} Switching to branch: $TARGET_BRANCH"
-            git checkout "$TARGET_BRANCH" || {
-                echo -e "${YELLOW}[WARNING]${NC} Failed to switch to branch $TARGET_BRANCH, continuing with current branch"
-            }
-        fi
-        
-        # Create necessary directories if they don't exist
-        mkdir -p data
-        mkdir -p backups
-        
-        # Set proper permissions for the application directory
-        chmod -R 755 ~/rental-recon/
-        
-        # Verify key files exist and have correct permissions
-        if [ -f "app/main.py" ]; then
-            echo -e "${GREEN}[INFO]${NC} Main application file found: app/main.py"
-            chmod 644 app/main.py
-        else
-            echo -e "${RED}[ERROR]${NC} Main application file not found: app/main.py"
-            exit 1
-        fi
-        
-        # Check for template files
-        TEMPLATE_COUNT=$(find app/templates -name "*.html" 2>/dev/null | wc -l)
-        if [ "$TEMPLATE_COUNT" -gt 0 ]; then
-            echo -e "${GREEN}[INFO]${NC} Found $TEMPLATE_COUNT template files"
-            chmod 644 app/templates/*.html 2>/dev/null || true
-        else
-            echo -e "${YELLOW}[WARNING]${NC} No template files found in app/templates/"
-        fi
-        
-        # Check for static files
-        if [ -d "app/static" ]; then
-            echo -e "${GREEN}[INFO]${NC} Static files directory found"
-            chmod -R 644 app/static/* 2>/dev/null || true
-        fi
-        
-        # Create or update systemd service file
-        SERVICE_FILE="/etc/systemd/system/rental-recon.service"
-        SERVICE_FILE_UPDATED=false
-        
-        # Check if service file exists and if it needs updating
-        if [ ! -f "$SERVICE_FILE" ] || ! grep -q "rental-recon" "$SERVICE_FILE" 2>/dev/null; then
-            echo -e "${GREEN}[INFO]${NC} Creating/updating systemd service file..."
-            sudo tee "$SERVICE_FILE" > /dev/null << 'SERVICE_EOF'
+    # ---
+# REMOTE SERVER SETUP, RESTART & VERIFICATION (EXAMPLES STYLE, ALL LOGS STREAMED LOCALLY)
+# ---
+ORANGE='\033[38;5;208m'
+VERSION="1.1"
+
+print_message "Checking remote requirements.txt..."
+ssh $REMOTE_HOST 'test -f ~/rental-recon/requirements.txt' || { print_error "requirements.txt not found on Pi!"; exit 1; }
+print_message "requirements.txt found."
+
+print_message "Activating conda environment and installing dependencies on Pi..."
+ssh $REMOTE_HOST 'source ~/miniconda3/etc/profile.d/conda.sh && conda activate rental-recon && pip install -r ~/rental-recon/requirements.txt'
+
+print_message "Checking/updating systemd service file on Pi..."
+ssh $REMOTE_HOST 'if [ ! -f /etc/systemd/system/rental-recon.service ]; then echo "Creating service file..."; sudo tee /etc/systemd/system/rental-recon.service > /dev/null << EOF2
 [Unit]
 Description=Rental Recon FastAPI Application
 After=network.target
-
 [Service]
 Type=simple
 User=smashimo
@@ -267,67 +186,61 @@ Environment=PATH=/home/smashimo/miniconda3/envs/rental-recon/bin
 ExecStart=/home/smashimo/miniconda3/envs/rental-recon/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=always
 RestartSec=3
-
 [Install]
 WantedBy=multi-user.target
-SERVICE_EOF
-            SERVICE_FILE_UPDATED=true
-            echo -e "${GREEN}[INFO]${NC} Service file created/updated."
+EOF2
+sudo systemctl daemon-reload; else echo "Service file exists."; fi'
+
+print_message "Enabling rental-recon service on Pi if not already enabled..."
+ssh $REMOTE_HOST 'sudo systemctl enable rental-recon.service 2>/dev/null && echo "Service enabled."'
+
+# --- SERVER RESTART & VERIFICATION ---
+echo -e "\n${ORANGE}[INFO] ====== BEGIN SERVER RESTART & VERIFICATION ======${NC}"
+echo -e "${ORANGE}[INFO] Version: ${VERSION} - Image Metadata Update${NC}"
+echo -e "${ORANGE}[INFO] Current time: $(date)${NC}"
+echo -e "${ORANGE}[INFO] Stopping service...${NC}"
+ssh $REMOTE_HOST 'sudo systemctl stop rental-recon.service && echo "Service stopped successfully."'
+sleep 2
+echo -e "${ORANGE}[INFO] Starting service...${NC}"
+ssh $REMOTE_HOST 'sudo systemctl start rental-recon.service && echo "Service started successfully."'
+sleep 2
+SERVICE_STATUS=$(ssh $REMOTE_HOST 'systemctl is-active rental-recon.service')
+if [ "$SERVICE_STATUS" = "active" ]; then
+    echo -e "${GREEN}[INFO] ✓ Service is running on Pi${NC}"
+    SERVICE_START_TIME=$(ssh $REMOTE_HOST 'systemctl show -p ActiveEnterTimestamp rental-recon.service | cut -d= -f2-')
+    SERVICE_START_EPOCH=$(date -j -f "%a %Y-%m-%d %H:%M:%S %Z" "$SERVICE_START_TIME" +%s 2>/dev/null || date -d "$SERVICE_START_TIME" +%s)
+    CURRENT_EPOCH=$(date +%s)
+    TIME_DIFF=$((CURRENT_EPOCH - SERVICE_START_EPOCH))
+    UPTIME=$(ssh $REMOTE_HOST 'systemctl status rental-recon.service | grep -oP "(?<=active \(running\) ).*" | cut -d " " -f1')
+    echo -e "${GREEN}[INFO] Service start time: $SERVICE_START_TIME${NC}"
+    echo -e "${GREEN}[INFO] Current time:       $(date)${NC}"
+    echo -e "${GREEN}[INFO] Uptime: $UPTIME (${TIME_DIFF} seconds ago)${NC}"
+    if [ $TIME_DIFF -le 60 ]; then
+        echo -e "${GREEN}[INFO] ✓ Service was restarted successfully!${NC}"
+        echo -e "${GREEN}[INFO] ✓ Server version: ${VERSION} - Image Metadata Update${NC}"
+        echo -e "${GREEN}[INFO] Verifying API accessibility...${NC}"
+        API_RESPONSE=$(ssh $REMOTE_HOST 'curl -s http://localhost:8000/api/health')
+        if [ -n "$API_RESPONSE" ]; then
+            echo -e "${GREEN}[INFO] ✓ API is responding: $API_RESPONSE${NC}"
         else
-            echo -e "${GREEN}[INFO]${NC} Service file already exists and appears correct."
+            echo -e "${YELLOW}[WARNING] Could not verify API response${NC}"
         fi
-        
-        # Reload systemd daemon if service file was updated
-        if [ "$SERVICE_FILE_UPDATED" = true ]; then
-            echo -e "${GREEN}[INFO]${NC} Reloading systemd daemon..."
-            sudo systemctl daemon-reload || { echo -e "${RED}[ERROR]${NC} Failed to reload systemd daemon!"; exit 1; }
-            echo -e "${GREEN}[INFO]${NC} Systemd daemon reloaded."
-        fi
-        
-        # Enable the service if not already enabled
-        if ! sudo systemctl is-enabled rental-recon.service &>/dev/null; then
-            echo -e "${GREEN}[INFO]${NC} Enabling rental-recon service..."
-            sudo systemctl enable rental-recon.service || { echo -e "${RED}[ERROR]${NC} Failed to enable service!"; exit 1; }
-            echo -e "${GREEN}[INFO]${NC} Service enabled."
-        else
-            echo -e "${GREEN}[INFO]${NC} Service already enabled."
-        fi
-        
-        # Stop the service if it's running
-        if sudo systemctl is-active rental-recon.service &>/dev/null; then
-            echo -e "${GREEN}[INFO]${NC} Stopping rental-recon service..."
-            sudo systemctl stop rental-recon.service || { echo -e "${YELLOW}[WARNING]${NC} Failed to stop service gracefully"; }
-        fi
-        
-        # Start the service
-        echo -e "${GREEN}[INFO]${NC} Starting rental-recon service..."
-        sudo systemctl start rental-recon.service
-        
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}[INFO]${NC} Service started successfully."
-        else
-            echo -e "${RED}[ERROR]${NC} Failed to start service!"
-            echo -e "${YELLOW}[INFO]${NC} Checking service status..."
-            sudo systemctl status rental-recon.service --no-pager -l
-            exit 1
-        fi
-        
-        # Wait a moment and check if the service is still running
-        sleep 3
-        if sudo systemctl is-active rental-recon.service &>/dev/null; then
-            echo -e "${GREEN}[SUCCESS]${NC} Rental Recon service is running!"
-            echo -e "${GREEN}[INFO]${NC} Service status:"
-            sudo systemctl status rental-recon.service --no-pager -l | head -10
-        else
-            echo -e "${RED}[ERROR]${NC} Service failed to stay running!"
-            echo -e "${YELLOW}[INFO]${NC} Service logs:"
-            sudo journalctl -u rental-recon.service --no-pager -l | tail -20
-            exit 1
-        fi
-        
-        echo -e "${GREEN}[SUCCESS]${NC} Deployment completed successfully!"
-        echo -e "${GREEN}[INFO]${NC} Application should be accessible at http://192.168.10.10:8000"
-EOF
+    else
+        echo -e "${YELLOW}[WARNING] Service was not recently restarted (${TIME_DIFF} seconds old).${NC}"
+        echo -e "${YELLOW}[WARNING]              The server may not be running the latest code.${NC}"
+    fi
+    echo -e "${GREEN}[INFO] === SERVICE STATUS ===${NC}"
+    ssh $REMOTE_HOST 'systemctl status rental-recon.service --no-pager -l | head -15'
+else
+    echo -e "${RED}[ERROR] Service is not running after restart attempt!${NC}"
+    echo -e "${YELLOW}[INFO] Service logs:${NC}"
+    ssh $REMOTE_HOST 'journalctl -u rental-recon.service --no-pager -l | tail -20'
+    exit 1
+fi
+echo -e "${GREEN}[SUCCESS] Deployment completed successfully!${NC}"
+echo -e "${GREEN}[INFO] Application should be accessible at http://192.168.10.10:8000"
+echo -e "${GREEN}[INFO] ====== END SERVER RESTART & VERIFICATION ======${NC}\n"
+
 
     # Check the exit status of the SSH command block
     SSH_EXIT_CODE=$?

@@ -355,14 +355,18 @@
     function resetMainImage() {
         mainImageData = null;
         existingMainImage = null;
-        
+
         const textContent = document.getElementById('mainImageTextContent');
         const preview = document.getElementById('mainImagePreview');
         const img = preview.querySelector('img');
-        
+
+        // Show the placeholder (text content), hide the preview, clear image src
         textContent.classList.remove('d-none');
         preview.classList.add('d-none');
         img.src = '';
+
+        // Do NOT trigger file input or open file picker
+        // (No further action, UI is now neutral)
     }
 
     function addAdditionalImageField() {

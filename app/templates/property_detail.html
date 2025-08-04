@@ -387,21 +387,9 @@
                 };
                 
                 // Prepare metadata text
-                const sizeKB = image.size_kb || 0;
-                const width = image.width || 0;
-                const height = image.height || 0;
-                const format = image.format || 'Unknown';
-                const originalFormat = image.original_format || null;
-                const isOptimized = image.is_optimized || false;
-                
-                let metadataText = `${width}×${height}px • ${format}`;
-                if (originalFormat && originalFormat !== format) {
-                    metadataText += ` (converted from ${originalFormat})`;
-                }
-                metadataText += ` • ${formatFileSize(sizeKB * 1024)}`;
-                if (isOptimized) {
-                    metadataText += ' • Optimized';
-                }
+                // Image metadata display removed - to be implemented in future update
+                // Fields available but not displayed: width, height, format, size_kb, original_format, is_optimized
+                const metadataText = '';  // Empty string to remove metadata display
                 
                 carouselItem.innerHTML = `
                     <div class="position-relative">

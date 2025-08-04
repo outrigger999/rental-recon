@@ -1,9 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 import os
+import time
+from datetime import datetime
 from dotenv import load_dotenv
+from typing import Dict, Any
 
 from dotenv import load_dotenv
 
@@ -24,8 +27,27 @@ from .routers import backup as backup_router
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
+# Application version
+APP_VERSION = "1.1.0"
+APP_START_TIME = time.time()
+
 # Create FastAPI app
-app = FastAPI(title="Rental Recon")
+app = FastAPI(
+    title="Rental Recon",
+    version=APP_VERSION,
+    description="Property management and documentation system"
+)
+
+@app.get("/api/health", response_model=Dict[str, Any])
+async def health_check():
+    """Health check endpoint that returns server status and version information."""
+    return {
+        "status": "healthy",
+        "version": APP_VERSION,
+        "server_time": datetime.utcnow().isoformat() + "Z",
+        "uptime_seconds": round(time.time() - APP_START_TIME, 2),
+        "service": "Rental Recon API"
+    }
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

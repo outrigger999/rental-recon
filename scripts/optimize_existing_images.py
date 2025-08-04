@@ -14,7 +14,6 @@ import logging
 from pathlib import Path
 from typing import List, Optional, Tuple
 from PIL import Image
-from pillow_heif import register_heif_opener
 
 # Add the project root to the Python path
 project_root = str(Path(__file__).parent.parent)
@@ -31,9 +30,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
-
-# Register HEIF/HEIC opener
-register_heif_opener()
 
 # Import database models after setting up the path
 from app.database import SessionLocal, engine
@@ -66,7 +62,7 @@ class ImageOptimizer:
         if not os.path.exists(dir_path):
             return []
             
-        image_exts = {'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'}
+        image_exts = {'.jpg', '.jpeg', '.png', '.webp'}
         return [
             (f, os.path.join(dir_path, f)) 
             for f in os.listdir(dir_path)
@@ -87,7 +83,7 @@ class ImageOptimizer:
             # Process the image
             processed_data = self.image_processor.optimize_image(
                 image_data,
-                target_format='JPEG',  # Convert all to JPEG for consistency
+                target_format='JPEG',  # for consistency
             )
             
             # Generate new filename
@@ -105,9 +101,23 @@ class ImageOptimizer:
         self, 
         property_id: int, 
         old_filename: str, 
-        new_filename: str
+        new_filename: str,
+        image_data: bytes = None,
+        original_format: str = None
     ) -> bool:
-        """Update the database with the new filename."""
+        """
+        Update the database with the new filename and metadata.
+        
+        Args:
+            property_id: ID of the property
+            old_filename: Original filename in the database
+            new_filename: New filename after optimization
+            image_data: The processed image data (for extracting metadata)
+            original_format: Original format of the image if it was converted
+            
+        Returns:
+            bool: True if update was successful, False otherwise
+        """
         try:
             # Find the image in the database
             db_image = self.db.query(PropertyImage).filter(
@@ -115,15 +125,40 @@ class ImageOptimizer:
                 PropertyImage.filename == old_filename
             ).first()
             
-            if db_image:
-                # Update the filename
-                db_image.filename = new_filename
-                self.db.commit()
-                logger.info(f"Updated database reference: {old_filename} -> {new_filename}")
-                return True
-            else:
+            if not db_image:
                 logger.warning(f"No database entry found for {old_filename}")
                 return False
+                
+            # Update the filename
+            db_image.filename = new_filename
+            
+            # If we have image data, extract and update metadata
+            if image_data is not None:
+                try:
+                    # Open the image to get dimensions
+                    from io import BytesIO
+                    from PIL import Image
+                    
+                    img = Image.open(BytesIO(image_data))
+                    width, height = img.size
+                    
+                    # Update metadata fields
+                    db_image.width = width
+                    db_image.height = height
+                    db_image.format = img.format.upper() if hasattr(img, 'format') and img.format else 'JPEG'
+                    db_image.size_kb = len(image_data) / 1024.0  # Convert to KB
+                    db_image.is_optimized = True
+                    db_image.original_format = original_format.upper() if original_format else None
+                    
+                    logger.info(f"Updated metadata for {new_filename}: {width}x{height}px, {db_image.format}, {db_image.size_kb:.1f}KB")
+                    
+                except Exception as e:
+                    logger.error(f"Error extracting metadata for {new_filename}: {str(e)}")
+                    # Don't fail the whole operation if metadata extraction fails
+            
+            self.db.commit()
+            logger.info(f"Updated database reference: {old_filename} -> {new_filename}")
+            return True
                 
         except Exception as e:
             self.db.rollback()
@@ -159,14 +194,27 @@ class ImageOptimizer:
                         continue
                     
                     # Optimize the image
-                    result = self.optimize_image(full_path)
-                    if not result:
-                        logger.warning(f"Skipping {filename} (optimization failed or not needed)")
+                    try:
+                        # Get the original format before optimization
+                        original_ext = os.path.splitext(filename)[1].lower().lstrip('.')
+                        if original_ext in ['heic', 'heif']:
+                            original_format = original_ext.upper()
+                        else:
+                            original_format = None
+                            
+                        # Optimize the image
+                        result = self.optimize_image(full_path)
+                        if not result:
+                            logger.warning(f"Skipping {filename} (optimization failed or not needed)")
+                            total_errors += 1
+                            continue
+                        
+                        processed_data, new_filename = result
+                        new_path = os.path.join(prop_dir, new_filename)
+                    except Exception as e:
+                        logger.error(f"Error processing {filename}: {str(e)}")
                         total_errors += 1
                         continue
-                    
-                    processed_data, new_filename = result
-                    new_path = os.path.join(prop_dir, new_filename)
                     
                     if dry_run:
                         logger.info(f"[DRY RUN] Would optimize {filename} -> {new_filename}")
@@ -177,8 +225,14 @@ class ImageOptimizer:
                         with open(new_path, 'wb') as f:
                             f.write(processed_data)
                         
-                        # Update database references
-                        if self.update_database_references(prop_id, filename, new_filename):
+                        # Update database references with metadata
+                        if self.update_database_references(
+                            prop_id, 
+                            filename, 
+                            new_filename,
+                            image_data=processed_data,
+                            original_format=original_format
+                        ):
                             # Remove the old file if optimization was successful and database updated
                             try:
                                 os.remove(full_path)

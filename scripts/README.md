@@ -9,7 +9,6 @@ This script optimizes all existing property images in the database by reducing t
 ### Features
 
 - Optimizes all images in the `app/static/images/property_*` directories
-- Converts HEIC/HEIF images to JPEG
 - Reduces file size while maintaining visual quality
 - Updates database references to point to the optimized images
 - Supports dry-run mode for testing
@@ -44,5 +43,6 @@ The script logs its progress to both the console and a file named `optimize_imag
 4. Monitor the log file for any errors during processing
 
 ## Note
+- Supported formats: JPEG, PNG, WEBP
 
 This script is designed to be idempotent - it can be run multiple times without causing issues. It will skip already optimized files (those with `_optimized` in the filename).
